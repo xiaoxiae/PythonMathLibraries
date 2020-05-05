@@ -1,10 +1,15 @@
 """Linear Algebra library"""
+# TODO: positively definite, gram schmidt, eigenvalues and eigenvectors, spectral decomposition
+# - add vectors
+#   - probably a vector class that plays nice with the matrix
+#   - getting row and column vectors
+#   - make a class hierarchy?
 
 from __future__ import annotations
 from typing import *
 from itertools import permutations, product
 from functools import reduce
-from math import gcd
+from math import gcd, sqrt, sin, cos
 
 
 Number = Union[int, float, complex]
@@ -19,9 +24,31 @@ class Matrix:
         """Creates a matrix from a list of values."""
         self.matrix = [list(arg) for arg in args]
 
-        for i in range(len(self.matrix) - 1):
-            if len(self.matrix[i]) != len(self.matrix[i + 1]):
-                raise ValueError(f"Row {i} has different size.")
+        if not all(
+            len(self.matrix[i]) == len(self.matrix[i + 1])
+            for i in range(len(self.matrix) - 1)
+        ):
+            raise ValueError("One of matrix rows has an incorrect dimension.")
+
+        if not all(type(e) in get_args(Number) for e in self.__yield_values()):
+            raise ValueError("Matrix elements have to be numeric.")
+
+    def __yield_indexes(self):
+        """Yield all indexes of the matrix."""
+        for i in range(self.rows()):
+            for j in range(self.columns()):
+                yield (i, j)
+
+    def __yield_values(self):
+        """Yield all elements of the matrix."""
+        for index in self.__yield_indexes():
+            yield self[index]
+
+    def __str__(self):
+        """Defines the string representation of the matrix."""
+        return str(self.matrix)
+
+    __repr__ = __str__
 
     def __getitem__(self, pos: Tuple[int, int]):
         """Return the value of the matrix at the given position."""
@@ -49,8 +76,7 @@ class Matrix:
             for l in range(j, self.columns()):
                 if self[k, l] != 0:
                     return False
-        else:
-            return True
+        return True
 
     def __multiply_row(self, row: int, constant: Number):
         """Multiply a row by a constant."""
@@ -67,8 +93,7 @@ class Matrix:
         for row in range(starting_index, self.rows()):
             if self[row, column] != 0:
                 return False
-        else:
-            return True
+        return True
 
     def rref(self):
         """Returns the RREF-version of the matrix (using Gauss-Jordan)."""
@@ -78,9 +103,7 @@ class Matrix:
         i, j = 0, 0
         while not res.__end_condition(i, j):
             j = min([l for l in range(j, columns) if not res.__empty_column(l, i)])
-
             res.__swap(i, min([l for l in range(i, rows) if res[l, j] != 0]))
-
             res.__multiply_row(i, 1 / res[i, j])
 
             for k in range(rows):
@@ -93,39 +116,32 @@ class Matrix:
 
     def inverse(self):
         """Return the inverse of the matrix."""
-        if self.rows() != self.columns():
-            raise ValueError(f"Matrix is not square!")
+        # TODO: what to do about this?
+        # if self.rows() != self.columns():
+        #     # return a more abstract inverse, if the dimensions don't match
+        #     return (self.transposed() * self).inverse() * self.transposed()
 
         result = Matrix.null(self.rows(), self.columns() * 2)
 
         # copy the matrix to the first part
-        for i in range(self.rows()):
-            for j in range(self.columns()):
-                result[i, j] = self[i, j]
+        for i, j in self.__yield_indexes():
+            result[i, j] = self[i, j]
 
         # copy the unit matrix to the second
-        for i in range(self.rows()):
-            for j in range(self.columns()):
-                result[i, j + self.columns()] = 1 if i == j else 0
+        for i, j in self.__yield_indexes():
+            result[i, j + self.columns()] = 1 if i == j else 0
 
-        # only take the second part
+        # return the second part
         return Matrix(*[row[self.columns() :] for row in result.rref().matrix])
 
     def transposed(self):
         """Return this matrix, transposed."""
         result = Matrix.null(self.columns(), self.rows())
 
-        for i in range(self.rows()):
-            for j in range(self.columns()):
-                result[j, i] = self[i, j]
+        for i, j in self.__yield_indexes():
+            result[j, i] = self[i, j]
 
         return result
-
-    def __str__(self):
-        """Defines the string representation of the matrix."""
-        return str(self.matrix)
-
-    __repr__ = __str__
 
     @classmethod
     def null(cls, rows: Union[int, Matrix] = None, columns: Optional[int] = None):
@@ -137,34 +153,32 @@ class Matrix:
 
         return cls(*([0] * (columns or rows) for row in range(rows)))
 
-    def copy(self):
-        """Return a copy of this matrix."""
-        result = Matrix.null(self)
-
-        for i in range(self.rows()):
-            for j in range(self.columns()):
-                result[i, j] = self[i, j]
-
-        return result
-
     @classmethod
     def unit(cls, n: int):
         """Return a unit matrix of the given size."""
         return cls(*([(0 if i != j else 1) for j in range(n)] for i in range(n)))
 
+    def copy(self):
+        """Return a copy of this matrix."""
+        result = Matrix.null(self)
+
+        for index in self.__yield_indexes():
+            result[index] = self[index]
+
+        return result
+
     def __add__(self, other: Matrix):
         """Defines matrix addition."""
-        if type(other) != Matrix:
-            raise TypeError(f"Addition not defined for <type(other).__name__)>!")
+        if type(other) is not Matrix:
+            raise TypeError(f"Addition undefined for <type(other).__name__)>!")
 
         if self.rows() != other.rows() or self.columns() != other.columns():
             raise ValueError("Mismatched matrix dimensions!")
 
         result = Matrix.copy(self)
 
-        for i in range(self.rows()):
-            for j in range(self.columns()):
-                result[i, j] += other[i, j]
+        for i, j in self.__yield_indexes():
+            result[i, j] += other[i, j]
 
         return result
 
@@ -176,8 +190,10 @@ class Matrix:
         """Defines scalar and matrix multiplication for a matrix object."""
         if type(other) in get_args(Number):
             return self.__scalar_mul(other)
+
         elif type(other) is Matrix:
             return self.__matrix_mul(other)
+
         else:
             raise TypeError(f"Multiplication not defined for <{type(other).__name__}>!")
 
@@ -187,9 +203,8 @@ class Matrix:
         """Returns a result of scalar multiplication."""
         result = Matrix.copy(self)
 
-        for i in range(self.rows()):
-            for j in range(self.columns()):
-                result[i, j] *= scalar
+        for i, j in self.__yield_indexes():
+            result[i, j] *= scalar
 
         return result
 
@@ -200,16 +215,33 @@ class Matrix:
 
         result = Matrix.null(self.rows(), other.columns())
 
-        for i in range(self.rows()):
-            for j in range(other.columns()):
-                for k in range(self.rows()):
-                    result[i, j] += self[i, k] * other[k, j]
+        for i, j in self.__yield_indexes():
+            for k in range(self.rows()):
+                result[i, j] += self[i, k] * other[k, j]
 
         return result
 
-    def __sgn(self, p):
+    def det(self):
+        """Calculate the determinant of a square matrix."""
+        if self.rows() != self.columns():
+            raise ValueError("Matrix not square!")
+
+        n = self.rows()
+
+        return sum(
+            [
+                Utilities.sign(p)
+                * reduce(lambda x, y: x * y, [self[i, p.index(i)] for i in range(n)])
+                for p in permutations({i for i in range(n)})
+            ]
+        )
+
+
+class Utilities:
+    @classmethod
+    def sign(self, p: Sequence[int]):
         """Return the sign of the given permutation."""
-        p = list(p)
+        p = list(p)  # perserve P
         transpositions = 0
 
         for i in range(len(p)):
@@ -221,16 +253,3 @@ class Matrix:
 
         return 1 if transpositions % 2 == 0 else -1
 
-    def det(self):
-        """Calculate the determinant of a square matrix."""
-        n = self.rows()
-        if n != self.columns():
-            raise ValueError("Matrix not square!")
-
-        return sum(
-            [
-                self.__sgn(p)
-                * reduce(lambda x, y: x * y, [self[i, p.index(i)] for i in range(n)])
-                for p in permutations({i for i in range(n)})
-            ]
-        )

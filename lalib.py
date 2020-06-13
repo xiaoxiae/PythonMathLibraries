@@ -15,6 +15,23 @@ from math import gcd, sqrt, sin, cos
 Number = Union[int, float, complex]
 
 
+class Utilities:
+    @classmethod
+    def sign(cls, p: Sequence[int]):
+        """Return the sign of the given permutation."""
+        p = list(p)  # preserve p
+        sgn = 1
+
+        for i in range(len(p)):
+            if i != p[i]:
+                j = p.index(i)
+                sgn *= -1
+
+                p[i], p[j] = p[j], p[i]
+
+        return sgn
+
+
 class Matrix:
     """A Python implementation a matrix class."""
 
@@ -33,24 +50,31 @@ class Matrix:
         if not all(type(e) in get_args(Number) for e in self.__yield_values()):
             raise ValueError("Matrix elements have to be numeric.")
 
-    def __yield_indexes(self):
+    def __yield_indexes(self) -> Iterator[Tuple[int, int]]:
         """Yield all indexes of the matrix."""
         for i in range(self.rows()):
             for j in range(self.columns()):
                 yield (i, j)
 
-    def __yield_values(self):
+    def __eq__(self, other):
+        """Matrix equality."""
+        if self.rows() != other.rows() or self.columns() != other.columns():
+            raise ValueError("Mismatched matrix dimensions!")
+
+        return all([self[i, j] == other[i, j] for i, j in self.__yield_indexes()])
+
+    def __yield_values(self) -> Iterator[Number]:
         """Yield all elements of the matrix."""
         for index in self.__yield_indexes():
             yield self[index]
 
-    def __str__(self):
+    def __str__(self) -> str:
         """Defines the string representation of the matrix."""
         return str(self.matrix)
 
     __repr__ = __str__
 
-    def __getitem__(self, pos: Tuple[int, int]):
+    def __getitem__(self, pos: Tuple[int, int]) -> Number:
         """Return the value of the matrix at the given position."""
         return self.matrix[pos[0]][pos[1]]
 
@@ -58,11 +82,11 @@ class Matrix:
         """Set the value of the matrix at a given position to a certain value."""
         self.matrix[pos[0]][pos[1]] = val
 
-    def rows(self):
+    def rows(self) -> int:
         """Return the number of rows of the matrix."""
         return len(self.matrix)
 
-    def columns(self):
+    def columns(self) -> int:
         """Return the number of columns of the atrix."""
         return len(self.matrix[0])
 
@@ -70,7 +94,7 @@ class Matrix:
         """Swap two rows of the matrix."""
         self.matrix[i], self.matrix[j] = self.matrix[j], self.matrix[i]
 
-    def __end_condition(self, i: int, j: int):
+    def __end_condition(self, i: int, j: int) -> bool:
         """Returns True if the end condition of Gauss-Jordan is satisfied; else False."""
         for k in range(i, self.rows()):
             for l in range(j, self.columns()):
@@ -88,14 +112,14 @@ class Matrix:
         for column in range(self.columns()):
             self[i, column] += multiple * self[j, column]
 
-    def __empty_column(self, column: int, starting_index: int):
+    def __empty_column(self, column: int, starting_index: int) -> bool:
         """Checks if a column contains only zeroes after a certain index."""
         for row in range(starting_index, self.rows()):
             if self[row, column] != 0:
                 return False
         return True
 
-    def rref(self):
+    def rref(self) -> Matrix:
         """Returns the RREF-version of the matrix (using Gauss-Jordan)."""
         res = self.copy()  # the resulting matrix
         rows, columns = res.rows(), res.columns()
@@ -114,13 +138,8 @@ class Matrix:
 
         return res
 
-    def inverse(self):
+    def inverse(self) -> Matrix:
         """Return the inverse of the matrix."""
-        # TODO: what to do about this?
-        # if self.rows() != self.columns():
-        #     # return a more abstract inverse, if the dimensions don't match
-        #     return (self.transposed() * self).inverse() * self.transposed()
-
         result = Matrix.null(self.rows(), self.columns() * 2)
 
         # copy the matrix to the first part
@@ -134,7 +153,7 @@ class Matrix:
         # return the second part
         return Matrix(*[row[self.columns() :] for row in result.rref().matrix])
 
-    def transposed(self):
+    def transposed(self) -> Matrix:
         """Return this matrix, transposed."""
         result = Matrix.null(self.columns(), self.rows())
 
@@ -144,22 +163,25 @@ class Matrix:
         return result
 
     @classmethod
-    def null(cls, rows: Union[int, Matrix] = None, columns: Optional[int] = None):
+    def null(
+        cls, rows: Union[int, Matrix] = None, columns: Optional[int] = None
+    ) -> Matrix:
         """Return a null matrix of the given size."""
         # if the parameter is a matrix, copy its size
-        if type(rows) is cls:
+        if isinstance(rows, cls):
             columns = rows.columns()
             rows = rows.rows()
 
         return cls(*([0] * (columns or rows) for row in range(rows)))
 
     @classmethod
-    def unit(cls, n: int):
-        """Return a unit matrix of the given size."""
+    def unit(cls, n: int) -> Matrix:
+        """Return a unit square matrix of the given size."""
         return cls(*([(0 if i != j else 1) for j in range(n)] for i in range(n)))
 
-    def copy(self):
-        """Return a copy of this matrix."""
+    def copy(self) -> Matrix:
+        """Return a copy of this matrix. Note for future self: do not define this in
+        terms of other functions (like self * 1), because they use this function."""
         result = Matrix.null(self)
 
         for index in self.__yield_indexes():
@@ -167,9 +189,9 @@ class Matrix:
 
         return result
 
-    def __add__(self, other: Matrix):
+    def __add__(self, other: Matrix) -> Matrix:
         """Defines matrix addition."""
-        if type(other) is not Matrix:
+        if not isinstance(other, Matrix):
             raise TypeError(f"Addition undefined for <type(other).__name__)>!")
 
         if self.rows() != other.rows() or self.columns() != other.columns():
@@ -182,24 +204,27 @@ class Matrix:
 
         return result
 
-    def __sub__(self, other: Matrix):
+    def __sub__(self, other: Matrix) -> Matrix:
         """Defines matrix subtraction (in terms of addition)."""
         return self + (-1 * other)
 
-    def __mul__(self, other: Union[Number, Matrix]):
+    def __mul__(self, other: Union[Number, Matrix]) -> Matrix:
         """Defines scalar and matrix multiplication for a matrix object."""
         if type(other) in get_args(Number):
             return self.__scalar_mul(other)
 
-        elif type(other) is Matrix:
+        if isinstance(other, Matrix):
             return self.__matrix_mul(other)
 
-        else:
-            raise TypeError(f"Multiplication not defined for <{type(other).__name__}>!")
+        raise TypeError(f"Multiplication not defined for <{type(other).__name__}>!")
 
     __rmul__ = __mul__
 
-    def __scalar_mul(self, scalar: Number):
+    def __neg__(self) -> Matrix:
+        """Defines matrix negation (in terms of multiplication)."""
+        return self * -1
+
+    def __scalar_mul(self, scalar: Number) -> Number:
         """Returns a result of scalar multiplication."""
         result = Matrix.copy(self)
 
@@ -208,20 +233,20 @@ class Matrix:
 
         return result
 
-    def __matrix_mul(self, other):
+    def __matrix_mul(self, other) -> Matrix:
         """Returns a result of matrix multiplication."""
         if self.columns() != other.rows():
             raise ValueError("Mismatched matrix dimensions!")
 
         result = Matrix.null(self.rows(), other.columns())
 
-        for i, j in self.__yield_indexes():
-            for k in range(self.rows()):
+        for i, j in result.__yield_indexes():
+            for k in range(other.rows()):
                 result[i, j] += self[i, k] * other[k, j]
 
         return result
 
-    def det(self):
+    def det(self) -> Number:
         """Calculate the determinant of a square matrix."""
         if self.rows() != self.columns():
             raise ValueError("Matrix not square!")
@@ -236,20 +261,48 @@ class Matrix:
             ]
         )
 
+    def magnitude(self) -> Number:
+        """Return the magnitude of a vector (a 1 by n or n by 1 matrix)."""
+        if self.rows() != 1 and self.columns != 1:
+            raise ValueError("Matrix is not a vector!")
 
-class Utilities:
-    @classmethod
-    def sign(self, p: Sequence[int]):
-        """Return the sign of the given permutation."""
-        p = list(p)  # perserve P
-        transpositions = 0
+        return sqrt(sum([v ** 2 for v in self.__yield_values()]))
 
-        for i in range(len(p)):
-            if i != p[i]:
-                j = p.index(i)
-                transpositions += 1
+    def normalized(self) -> Matrix:
+        """Return the vector (a 1 by n or n by 1 matrix) normalized."""
+        return self * (1 / self.magnitude())
 
-                p[i], p[j] = p[j], p[i]
+    # def get_submatrix(self, a: Tuple, b):
+    #    """Return the matrix from a given (i < j) to (k < l) rectangle"""
+    #    if not (a[0] <= a[1] and b[0] <= b[1] and a[0] <= b[0] and a[1] <= b[1]):
+    #        raise ValueError("Wrong submatrix indexes!")
 
-        return 1 if transpositions % 2 == 0 else -1
+    #    for i in range(*a):
 
+    def get_row(self, i) -> Matrix:
+        """Return a vector from the given matrix row."""
+        return Matrix(self.matrix[i])
+
+    def set_row(self, i, row: Matrix):
+        """Set the i-th row of the matrix to the given value."""
+        self.matrix[i] = row.matrix[0]
+
+    def orthogonalized(self):
+        """Return this matrix, orthogonalized (by rows), using Gram-Schmidt."""
+        res = self.copy()  # the resulting matrix
+
+        for k in range(self.rows()):
+            y_k = sum(
+                [
+                    -(self.get_row(k) * res.get_row(j).transposed()) * res.get_row(j)
+                    for j in range(k)
+                ],
+                self.get_row(k),
+            )
+
+            if y_k.magnitude() == 0:
+                raise ValueError("Matrix not orthogonalizable!")
+
+            res.set_row(k, y_k.normalized())
+
+        return res

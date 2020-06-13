@@ -1,9 +1,5 @@
 """Linear Algebra library"""
-# TODO: positively definite, gram schmidt, eigenvalues and eigenvectors, spectral decomposition
-# - add vectors
-#   - probably a vector class that plays nice with the matrix
-#   - getting row and column vectors
-#   - make a class hierarchy?
+# TODO: positively definite, eigenvalues and eigenvectors, spectral decomposition
 
 from __future__ import annotations
 from typing import *
@@ -288,21 +284,21 @@ class Matrix:
         self.matrix[i] = row.matrix[0]
 
     def orthogonalized(self):
-        """Return this matrix, orthogonalized (by rows), using Gram-Schmidt."""
+        """Return this matrix, orthogonalized (by rows), using Gramm-Schmidt."""
         res = self.copy()  # the resulting matrix
 
         for k in range(self.rows()):
-            y_k = sum(
-                [
-                    -(self.get_row(k) * res.get_row(j).transposed()) * res.get_row(j)
-                    for j in range(k)
-                ],
-                self.get_row(k),
-            )
+            y_k = self.get_row(k)
 
+            # subtract the projections
+            for i in range(k):
+                y_k -= (self.get_row(k) * res.get_row(i).transposed()) * res.get_row(i)
+
+            # check if they aren't linearly dependent
             if y_k.magnitude() == 0:
                 raise ValueError("Matrix not orthogonalizable!")
 
+            # if not, normalize and set
             res.set_row(k, y_k.normalized())
 
         return res

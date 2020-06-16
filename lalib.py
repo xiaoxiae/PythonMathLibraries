@@ -46,6 +46,17 @@ class Matrix:
         if not all(type(e) in get_args(Number) for e in self.__yield_values()):
             raise ValueError("Matrix elements have to be numeric.")
 
+    def assert_square(function):
+        """A decorator for asserting a square matrix."""
+
+        def wrapper(self, *args, **kwargs):
+            if self.rows() != self.columns():
+                raise ValueError("Matrix not square!")
+
+            return function(self, *args, **kwargs)
+
+        return wrapper
+
     def __yield_indexes(self) -> Iterator[Tuple[int, int]]:
         """Yield all indexes of the matrix."""
         for i in range(self.rows()):
@@ -134,6 +145,7 @@ class Matrix:
 
         return res
 
+    @assert_square
     def inverse(self) -> Matrix:
         """Return the inverse of the matrix."""
         result = Matrix.null(self.rows(), self.columns() * 2)
@@ -146,8 +158,14 @@ class Matrix:
         for i, j in self.__yield_indexes():
             result[i, j + self.columns()] = 1 if i == j else 0
 
-        # return the second part
-        return Matrix(*[row[self.columns() :] for row in result.rref().matrix])
+        rref = result.rref()
+
+        # check, if the left part is unit
+        for i in range(self.rows()):
+            if rref[i, i] != 1:
+                raise ValueError("Matrix not invertible (rows are linearly dependent)!")
+
+        return Matrix(*[row[self.columns() :] for row in rref.matrix])
 
     def transposed(self) -> Matrix:
         """Return this matrix, transposed."""
@@ -244,9 +262,6 @@ class Matrix:
 
     def det(self) -> Number:
         """Calculate the determinant of a square matrix."""
-        if self.rows() != self.columns():
-            raise ValueError("Matrix not square!")
-
         n = self.rows()
 
         return sum(
@@ -259,7 +274,7 @@ class Matrix:
 
     def magnitude(self) -> Number:
         """Return the magnitude of a vector (a 1 by n or n by 1 matrix)."""
-        if self.rows() != 1 and self.columns != 1:
+        if not (self.rows() == 1 or self.columns() == 1):
             raise ValueError("Matrix is not a vector!")
 
         return sqrt(sum([v ** 2 for v in self.__yield_values()]))
@@ -268,37 +283,30 @@ class Matrix:
         """Return the vector (a 1 by n or n by 1 matrix) normalized."""
         return self * (1 / self.magnitude())
 
-    # def get_submatrix(self, a: Tuple, b):
-    #    """Return the matrix from a given (i < j) to (k < l) rectangle"""
-    #    if not (a[0] <= a[1] and b[0] <= b[1] and a[0] <= b[0] and a[1] <= b[1]):
-    #        raise ValueError("Wrong submatrix indexes!")
-
-    #    for i in range(*a):
-
-    def get_row(self, i) -> Matrix:
+    def __get_row(self, i) -> Matrix:
         """Return a vector from the given matrix row."""
         return Matrix(self.matrix[i])
 
-    def set_row(self, i, row: Matrix):
+    def __set_row(self, i, row: Matrix):
         """Set the i-th row of the matrix to the given value."""
         self.matrix[i] = row.matrix[0]
 
-    def orthogonalized(self):
-        """Return this matrix, orthogonalized (by rows), using Gramm-Schmidt."""
+    def orthogonalized(self) -> Matrix:
+        """Return this matrix, orthogonalized (by rows), using Gram-Schmidt."""
         res = self.copy()  # the resulting matrix
 
         for k in range(self.rows()):
-            y_k = self.get_row(k)
+            y_k = self.__get_row(k)
 
             # subtract the projections
             for i in range(k):
-                y_k -= (self.get_row(k) * res.get_row(i).transposed()) * res.get_row(i)
+                y_k -= (self.__get_row(k) * res.__get_row(i).transposed()) * res.__get_row(i)
 
             # check if they aren't linearly dependent
             if y_k.magnitude() == 0:
-                raise ValueError("Matrix not orthogonalizable!")
+                raise ValueError("Matrix not orthogonalizable (rows are linearly dependent)!")
 
             # if not, normalize and set
-            res.set_row(k, y_k.normalized())
+            res.__set_row(k, y_k.normalized())
 
         return res

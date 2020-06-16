@@ -1,5 +1,5 @@
 """Linear Algebra library"""
-# TODO: positively definite, eigenvalues and eigenvectors, spectral decomposition
+# TODO: eigenvalues and eigenvectors, spectral decomposition
 
 from __future__ import annotations
 from typing import *
@@ -52,6 +52,17 @@ class Matrix:
         def wrapper(self, *args, **kwargs):
             if self.rows() != self.columns():
                 raise ValueError("Matrix not square!")
+
+            return function(self, *args, **kwargs)
+
+        return wrapper
+
+    def assert_symmetric(function):
+        """A decorator for asserting a symmetric matrix."""
+
+        def wrapper(self, *args, **kwargs):
+            if not self.is_symmetric():
+                raise ValueError("Matrix not symmetric!")
 
             return function(self, *args, **kwargs)
 
@@ -300,13 +311,78 @@ class Matrix:
 
             # subtract the projections
             for i in range(k):
-                y_k -= (self.__get_row(k) * res.__get_row(i).transposed()) * res.__get_row(i)
+                y_k -= (
+                    self.__get_row(k) * res.__get_row(i).transposed()
+                ) * res.__get_row(i)
 
             # check if they aren't linearly dependent
             if y_k.magnitude() == 0:
-                raise ValueError("Matrix not orthogonalizable (rows are linearly dependent)!")
+                raise ValueError(
+                    "Matrix not orthogonalizable (rows are linearly dependent)!"
+                )
 
             # if not, normalize and set
             res.__set_row(k, y_k.normalized())
 
         return res
+
+    @assert_square
+    def is_symmetric(self) -> bool:
+        """Return True if the matrix is symmetric, else False."""
+        for i in range(self.rows()):
+            for j in range(i, self.rows()):
+                if self[i, j] != self[j, i]:
+                    return False
+        return True
+
+    def submatrix(self, x1: int, y1: int, x2: int, y2: int):
+        """Return a submatrix (inclusive)."""
+        if (
+            x1 > x2
+            or y1 > y2
+            or min(x1, x2) < 0
+            or max(x1, x2) >= self.columns()
+            or min(y1, y2) < 0
+            or max(y1, y2) >= self.rows()
+        ):
+            raise ValueError("Invalid coordinates!")
+
+        result = Matrix.null(x2 - x1 + 1, y2 - y1 + 1)
+
+        for x in range(x1, x2 + 1):
+            for y in range(y1, y2 + 1):
+                result[x - x1, y - y1] = self[x, y]
+
+        return result
+
+    def __definitiveness(self, matrix: Matrix = None) -> int:
+        """Recursively calculate the definitiveness of a given matrix, returning 0 for
+        not, 1 for semi-definite and 2 for definite."""
+        if matrix is None:
+            matrix = self
+
+        alpha = matrix[0, 0]  # top left element
+
+        # look at the diagonal
+        res = 2 if alpha > 0 else 1 if alpha == 0 else 0
+
+        # if we're not at a 1 by 1 matrix, recurse
+        if matrix.rows() != 1:
+            a = Matrix(matrix.matrix[0][1:])  # row vector (without alpha)
+            A = matrix.submatrix(1, 1, matrix.rows() - 1, matrix.rows() - 1)
+
+            res = min(res, self.__definitiveness(A - 1 / alpha * a.transposed() * a))
+
+        return verdict
+
+    @assert_square
+    @assert_symmetric
+    def is_definite(self) -> bool:
+        """Whether the matrix is definite (using the recursive formula)."""
+        return self.__definitiveness() == 2
+
+    @assert_square
+    @assert_symmetric
+    def is_semidefinite(self) -> bool:
+        """Whether the matrix is definite (using the recursive formula)."""
+        return self.__definitiveness() == 1

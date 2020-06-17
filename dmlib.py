@@ -4,7 +4,6 @@ import itertools
 from typing import *
 from math import factorial as f
 
-
 def yield_subsets(iterable):
     """Yield all subsets of a given iterable."""
     for k in range(len(iterable) + 1):

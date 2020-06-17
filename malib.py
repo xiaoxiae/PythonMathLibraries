@@ -1,4 +1,4 @@
-"""Mathematical analysis library"""
+"""Mathematical Analysis library"""
 
 from __future__ import annotations
 from typing import *
@@ -46,6 +46,9 @@ class Polynomial:
 
     def __add__(self, other):
         """Polynomial addition."""
+        if type(other) in get_args(Number):
+            other = Polynomial(other)
+
         result = Polynomial()
 
         for i in range(max(len(self), len(other))):

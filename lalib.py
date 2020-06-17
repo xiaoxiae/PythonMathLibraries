@@ -7,8 +7,10 @@ from itertools import permutations, product
 from functools import reduce
 from math import gcd, sqrt, sin, cos
 
+from malib import Polynomial
 
-Number = Union[int, float, complex]
+
+Number = Union[complex, int, float, Polynomial]
 
 
 class Utilities:
@@ -36,6 +38,17 @@ class Matrix:
     def __init__(self, *args: Sequence[Number]):
         """Creates a matrix from a list of values."""
         self.matrix = [list(arg) for arg in args]
+
+        for i,row in enumerate(self.matrix):
+            if len(row) != len(self.matrix[i - 1]):
+                raise ValueError("Length of rows not uniform!")
+
+        # a little hack -- since we can't do int + Polynomial (but we do want to make
+        # it possible for matrices to have polynomials as values), we will treat floats
+        # and ints as polynomials of degree 0, since that is what they are
+        for i, j in self.__yield_indexes():
+            if type(self[i, j]) in (int, float):
+                self[i, j] = Polynomial(self[i, j])
 
         if not all(
             len(self.matrix[i]) == len(self.matrix[i + 1])
@@ -280,7 +293,8 @@ class Matrix:
                 Utilities.sign(p)
                 * reduce(lambda x, y: x * y, [self[i, p.index(i)] for i in range(n)])
                 for p in permutations({i for i in range(n)})
-            ]
+            ],
+            Polynomial(),
         )
 
     def magnitude(self) -> Number:
@@ -386,3 +400,8 @@ class Matrix:
     def is_semidefinite(self) -> bool:
         """Whether the matrix is definite (using the recursive formula)."""
         return self.__definitiveness() == 1
+
+    @assert_square
+    def characteristic_polynomial(self) -> Polynomial:
+        """Return the characteristic polynomial of the matrix."""
+        return (self - Matrix.unit(self.rows()) * Polynomial(0, 1)).det()

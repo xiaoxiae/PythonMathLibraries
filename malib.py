@@ -219,7 +219,12 @@ class Polynomial(Integrable, Differentiable):
 
         return result
 
-    def roots(self, tolerance=(10 ** (-15))) -> List[Number]:
+    def __beter_zero(self, a: Number, b: Number):
+        """Return a or b, depending on whether it is closer to a zero of the
+        polynomial."""
+        return a if abs(self.at(a)) <= abs(self.at(b)) else b
+
+    def roots(self, tolerance=(10 ** (-14))) -> List[Number]:
         """Return the roots of the polynomial using Aberth's method
         See https://en.wikipedia.org/wiki/Aberth_method."""
         p = self
@@ -263,7 +268,23 @@ class Polynomial(Integrable, Differentiable):
 
             # if all of them converged, return them
             if converged == len(z_new):
-                return z_new
+                z_modified = []
+
+                # try to convert roots from complex to real and see if it improves the
+                # approximation
+                for e in z_new:
+                    places = 4
+
+                    # attempt to round the real and the complex part
+                    e = self.__beter_zero(complex(round(e.real, places), e.imag), e)
+                    e = self.__beter_zero(complex(e.real, round(e.imag, places)), e)
+
+                    # attempt to make a real
+                    e = self.__beter_zero(e.real, e)
+
+                    z_modified.append(e)
+
+                return z_modified
 
             z = z_new
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 from typing import *
 from dataclasses import dataclass
 
-Number = Union[int, float]
+Number = Union[int, float, complex]
 
 
 @dataclass
@@ -19,28 +19,46 @@ class Polynomial:
 
     def __str__(self):
         """A string representation -- 4x^2 + 2x^3 - ..."""
+        # special case for a zero polynomial
+        if self == Polynomial():
+            return "0"
+
         result = ""
 
-        # to not print the tailing zeroes
-        last_non_zero_index = 0
+        # to not print tailing or leading zeroes
+        first_non_zero_index = -1
+        last_non_zero_index = -1
         for i in range(len(self)):
             if self[i] != 0:
                 last_non_zero_index = i + 1
 
-        for i in range(last_non_zero_index):
-            current = str(abs(self[i]))
+                if first_non_zero_index == -1:
+                    first_non_zero_index = i
+
+        for i in range(first_non_zero_index, last_non_zero_index):
+            # skip zeroes
+            if self[i] == 0:
+                continue
+
+            # if coefficients are real, abs them to add additional space between + or -
+            current = (
+                str(abs(self[i])) if not isinstance(self[i], complex) else str(self[i])
+            )
 
             if i >= 1:
                 current += "x"
             if i > 1:
                 current += f"^{i}"
 
-            if i != 0:
-                current = f" {'+' if self[i] >= 0 else '-'} " + current
+            if i != first_non_zero_index:
+                current = (
+                    f" {'+' if isinstance(self[i], complex) or self[i] >= 0 else '-'} "
+                    + current
+                )
 
             result += current
 
-        return "0" if result == "" else result
+        return result
 
     __repr__ = __str__
 
@@ -67,15 +85,11 @@ class Polynomial:
     def __getitem__(self, i: int) -> Number:
         """Return the i-th coefficient of the polynomial. Return 0 if outside the range
         of values."""
-        # TODO wrap around on negatives
-
         return self.coefficients[i] if i < len(self) else 0
 
     def __setitem__(self, i: int, coefficient: Number):
         """Set the i-th polynomial coefficient to the given value. Raises an exception
         if i is negative."""
-        # TODO wrap around on negatives
-
         # make room (if there isn't enough)
         self.coefficients += [0] * (i - len(self) + 1)
 

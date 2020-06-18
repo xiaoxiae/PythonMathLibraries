@@ -3,6 +3,7 @@
 from __future__ import annotations
 from typing import *
 from dataclasses import dataclass
+from random import random
 
 Number = Union[int, float, complex]
 
@@ -11,46 +12,60 @@ Number = Union[int, float, complex]
 class Polynomial:
     """A class representing a polynomial."""
 
+    def strip_tailing_zeroes(function):
+        """A decorator for calling __strip_tailing_zeroes on methods returning
+        polynomials."""
+
+        def wrapper(self, *args, **kwargs):
+            result = function(self, *args, **kwargs)
+
+            # if the function didn't return anything, strip itself instead
+            if result is None:
+                result = self
+
+            while len(result.coefficients) != 1 and result.coefficients[-1] == 0:
+                result.coefficients.pop()
+
+            # if the function didn't return anything, don't return anything either
+            if result is not self:
+                return result
+
+        return wrapper
+
+    @strip_tailing_zeroes
     def __init__(self, *args: Sequence[Number]):
         if not all(type(e) in get_args(Number) for e in args):
             raise ValueError("Polynomial coefficients have to be numeric.")
 
-        self.coefficients = [] if len(args) == 0 else list(args)
+        self.coefficients = [0] if len(args) == 0 else list(args)
 
     def __str__(self):
-        """A string representation -- 4x^2 + 2x^3 - ..."""
-        # special case for a zero polynomial
+        """A string representation of the polynomial."""
+        result = ""
+
+        # special case for zero polynomial
         if self == Polynomial():
             return "0"
 
-        result = ""
-
-        # to not print tailing or leading zeroes
-        first_non_zero_index = -1
-        last_non_zero_index = -1
+        non_zero_found = False
         for i in range(len(self)):
-            if self[i] != 0:
-                last_non_zero_index = i + 1
-
-                if first_non_zero_index == -1:
-                    first_non_zero_index = i
-
-        for i in range(first_non_zero_index, last_non_zero_index):
             # skip zeroes
             if self[i] == 0:
                 continue
 
-            # if coefficients are real, abs them to add additional space between + or -
-            current = (
-                str(abs(self[i])) if not isinstance(self[i], complex) else str(self[i])
-            )
+            # if coefficients are complex or we're at the first one, simply str it
+            # else abs it to later put space between -/+
+            if isinstance(self[i], complex) or not non_zero_found:
+                current = str(self[i])
+            else:
+                current = str(abs(self[i]))
 
             if i >= 1:
                 current += "x"
             if i > 1:
                 current += f"^{i}"
 
-            if i != first_non_zero_index:
+            if non_zero_found:
                 current = (
                     f" {'+' if isinstance(self[i], complex) or self[i] >= 0 else '-'} "
                     + current
@@ -58,10 +73,13 @@ class Polynomial:
 
             result += current
 
+            non_zero_found = True
+
         return result
 
     __repr__ = __str__
 
+    @strip_tailing_zeroes
     def __add__(self, other):
         """Polynomial addition."""
         if type(other) in get_args(Number):
@@ -79,24 +97,27 @@ class Polynomial:
         return self + (-1 * other)
 
     def __len__(self):
-        """The degree of the polynomial."""
+        """Length is the number of coefficients of the polynomial."""
         return len(self.coefficients)
+
+    def degree(self):
+        """The degree of the polynomial."""
+        return len(self) - 1
 
     def __getitem__(self, i: int) -> Number:
         """Return the i-th coefficient of the polynomial. Return 0 if outside the range
         of values."""
         return self.coefficients[i] if i < len(self) else 0
 
+    @strip_tailing_zeroes
     def __setitem__(self, i: int, coefficient: Number):
         """Set the i-th polynomial coefficient to the given value. Raises an exception
         if i is negative."""
         # make room (if there isn't enough)
         self.coefficients += [0] * (i - len(self) + 1)
-
         self.coefficients[i] = coefficient
 
-    degree = __len__
-
+    @strip_tailing_zeroes
     def __mul__(self, other):
         """Polynomial multiplication."""
         # if we're multiplying a number, make it a polynomial -- removes duplicity
@@ -114,10 +135,6 @@ class Polynomial:
 
     __rmul__ = __mul__
 
-    def __div__(self, other: Polynomial) -> Polynomial:
-        """Divide a polynomial by another polynomial (only if it's a root!)"""
-        # TODO
-
     def at(self, x: Number) -> Number:
         """Evaluate the polynomial at the given point (using Horner's scheme)."""
         value = self[len(self) - 1]
@@ -129,11 +146,12 @@ class Polynomial:
 
     def __eq__(self, other: Polynomial) -> bool:
         """Polynomial equivalence -- same coefficients."""
-        for i in range(max(len(self), len(other))):
+        for i in range(max(len(self) + 1, len(other) + 1)):
             if self[i] != other[i]:
                 return False
         return True
 
+    @strip_tailing_zeroes
     def __pow__(self, exponent: int) -> Polynomial:
         """Return the polynomial to the n-th power."""
         # I do realize that this means that 0^0 = 1, but this is quite useful in things
@@ -151,11 +169,12 @@ class Polynomial:
         """Perform a single derivation."""
         result = Polynomial()
 
-        for i in range(len(self)):
+        for i in range(len(self) + 1):
             result[i] = self[i + 1] * (i + 1)
 
         return result
 
+    @strip_tailing_zeroes
     def derivative(self, n: int = 1) -> Polynomial:
         """Return the n-th derivative of the polynomial."""
         result = self
@@ -174,6 +193,7 @@ class Polynomial:
 
         return result
 
+    @strip_tailing_zeroes
     def integral(self, n: int = 1) -> Polynomial:
         """Return the n-th integral of the polynomial."""
         result = self
@@ -182,3 +202,51 @@ class Polynomial:
             result = result.__integrate()
 
         return result
+
+    def roots(self, tolerance=(10 ** (-15))) -> List[Number]:
+        """Return the roots of the polynomial using Aberth's method
+        See https://en.wikipedia.org/wiki/Aberth_method."""
+        p = self
+        n = p.degree()
+
+        # special case for a polynomial of degree 0
+        if n == 0:
+            return []
+
+        # first, find the lower/upper bound for the roots
+        # https://en.wikipedia.org/wiki/Properties_of_polynomial_roots#Lagrange's_and_Cauchy's_bounds
+        cauchy = 1 + sum([abs(p[n] / p[-1]) for n in range(len(p) - 1)])
+
+        # pick degree() random complex numbers
+        z = [complex(random(), random()) for _ in range(n)]
+
+        # set the magnitudes to be somewhere from (0, cauchy)
+        for i in range(len(z)):
+            z[i] = (random() * cauchy) * (z[i] / abs(z[i]))
+
+        # iterate the roots
+        pd = self.derivative()
+
+        while True:
+            z_new = []  # new roots
+            converged = 0  # number of roots that converged
+            for k in range(len(z)):
+                # if a root converged (well enough), simply add it
+                if abs(p.at(z[k])) <= tolerance:
+                    z_new.append(z[k])
+                    converged += 1
+                else:
+                    z_new.append(
+                        z[k]
+                        - 1
+                        / (
+                            pd.at(z[k]) / p.at(z[k])
+                            - sum([1 / (z[k] - z[j]) for j in range(n) if j != k])
+                        )
+                    )
+
+            # if all of them converged, return them
+            if converged == len(z_new):
+                return z_new
+
+            z = z_new

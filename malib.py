@@ -4,12 +4,28 @@ from __future__ import annotations
 from typing import *
 from dataclasses import dataclass
 from random import random
+from abc import ABC
+from math import factorial
 
 Number = Union[int, float, complex]
 
 
+class Differentiable(ABC):
+    """A class inherited by objects that are differentiable."""
+
+    def derivative(self, n: int = 1):
+        """Return the n-th derivative of the function."""
+
+
+class Integrable(ABC):
+    """A class inherited by objects that are integrable."""
+
+    def integral(self, n: int = 1):
+        """Return the n-th integral of the function."""
+
+
 @dataclass
-class Polynomial:
+class Polynomial(Integrable, Differentiable):
     """A class representing a polynomial."""
 
     def strip_tailing_zeroes(function):
@@ -19,15 +35,17 @@ class Polynomial:
         def wrapper(self, *args, **kwargs):
             result = function(self, *args, **kwargs)
 
-            # if the function didn't return anything, strip itself instead
-            if result is None:
+            # if the function didn't return anything, use self instead
+            returned_none = result is None
+
+            if returned_none:
                 result = self
 
             while len(result.coefficients) != 1 and result.coefficients[-1] == 0:
                 result.coefficients.pop()
 
             # if the function didn't return anything, don't return anything either
-            if result is not self:
+            if not returned_none:
                 return result
 
         return wrapper
@@ -250,3 +268,14 @@ class Polynomial:
                 return z_new
 
             z = z_new
+
+
+def taylor(f, a: Number, n: int = 1):
+    """Return the n-th Taylor series of the given differentiable function at a."""
+    return sum(
+        [
+            f.derivative(i).at(a) / factorial(i) * (Polynomial(0, 1) - a) ** i
+            for i in range(n)
+        ],
+        type(f)(),
+    )

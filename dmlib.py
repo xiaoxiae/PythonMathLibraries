@@ -1,5 +1,3 @@
-"""Discrete Mathematics library"""
-
 import itertools
 from typing import *
 from math import factorial as f

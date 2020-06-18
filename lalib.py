@@ -1,6 +1,3 @@
-"""Linear Algebra library"""
-# TODO: eigenvalues and eigenvectors, spectral decomposition
-
 from __future__ import annotations
 from typing import *
 from itertools import permutations, product
@@ -15,7 +12,7 @@ Number = Union[complex, int, float, Polynomial]
 
 class Utilities:
     @classmethod
-    def sign(cls, p: Sequence[int]):
+    def sign(cls, p: Sequence[int]) -> int:
         """Return the sign of the given permutation."""
         p = list(p)  # preserve p
         sgn = 1
@@ -31,7 +28,7 @@ class Utilities:
 
 
 class Matrix:
-    """A Python implementation a matrix class."""
+    """A Python implementation of a matrix class."""
 
     matrix = None
 
@@ -39,22 +36,16 @@ class Matrix:
         """Creates a matrix from a list of values."""
         self.matrix = [list(arg) for arg in args]
 
-        for i,row in enumerate(self.matrix):
+        for i, row in enumerate(self.matrix):
             if len(row) != len(self.matrix[i - 1]):
                 raise ValueError("Length of rows not uniform!")
 
         # a little hack -- since we can't do int + Polynomial (but we do want to make
         # it possible for matrices to have polynomials as values), we will treat floats
-        # and ints as polynomials of degree 0, since that is what they are
+        # and ints as polynomials of degree 0, since that is pretty much what they are
         for i, j in self.__yield_indexes():
             if type(self[i, j]) in (int, float):
                 self[i, j] = Polynomial(self[i, j])
-
-        if not all(
-            len(self.matrix[i]) == len(self.matrix[i + 1])
-            for i in range(len(self.matrix) - 1)
-        ):
-            raise ValueError("One of matrix rows has an incorrect dimension.")
 
         if not all(type(e) in get_args(Number) for e in self.__yield_values()):
             raise ValueError("Matrix elements have to be numeric.")
@@ -87,6 +78,11 @@ class Matrix:
             for j in range(self.columns()):
                 yield (i, j)
 
+    def __yield_values(self) -> Iterator[Number]:
+        """Yield all elements of the matrix."""
+        for index in self.__yield_indexes():
+            yield self[index]
+
     def __eq__(self, other):
         """Matrix equality."""
         if self.rows() != other.rows() or self.columns() != other.columns():
@@ -94,14 +90,48 @@ class Matrix:
 
         return all([self[i, j] == other[i, j] for i, j in self.__yield_indexes()])
 
-    def __yield_values(self) -> Iterator[Number]:
-        """Yield all elements of the matrix."""
-        for index in self.__yield_indexes():
-            yield self[index]
-
     def __str__(self) -> str:
-        """Defines the string representation of the matrix."""
-        return str(self.matrix)
+        """Defines the string representation of the matrix:
+        ⌈3 1 2⌉                 ⌈x     ⌉
+        |2 5 1|    [1 2 3 4]    |x + 2 |    ...
+        ⌊2 6 1⌋                 ⌊2x - 3⌋
+        """
+
+        column_widths = [0] * self.columns()
+        for i, j in self.__yield_indexes():
+            column_widths[j] = max(column_widths[j], len(str(self[i, j])))
+
+        result = ""
+
+        for i in range(self.rows()):
+            for j in range(self.columns()):
+                if j == 0:
+                    result += (
+                        "["
+                        if self.rows() == 1
+                        else "⌈"
+                        if i == 0
+                        else "⌊"
+                        if i == self.rows() - 1
+                        else "|"
+                    )
+
+                result += str(self[i, j]).rjust(column_widths[j] + (1 if j != 0 else 0))
+
+                if j == self.columns() - 1:
+                    result += (
+                        "]"
+                        if self.rows() == 1
+                        else "⌉"
+                        if i == 0
+                        else "⌋"
+                        if i == self.rows() - 1
+                        else "|"
+                    )
+
+            result += "\n"
+
+        return result.strip()
 
     __repr__ = __str__
 
@@ -118,7 +148,7 @@ class Matrix:
         return len(self.matrix)
 
     def columns(self) -> int:
-        """Return the number of columns of the atrix."""
+        """Return the number of columns of the matrix."""
         return len(self.matrix[0])
 
     def __swap(self, i: int, j: int):
